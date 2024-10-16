@@ -1,0 +1,31 @@
+def print_code(code):
+    print(f'[{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
+    print(code.generator_matrix())
+    
+
+q = 3    
+k.<w> = GF(q **2);
+P.<x,y,z> = ProjectiveSpace(k, 2);
+C = Curve(y**2+x**2+z**2, P);
+F = C.function_field()
+pls = F.places()
+p = C([1,1,1])
+Q, = p.places()
+pls.remove(Q)
+G = 2*Q
+#G = 2 * (C.divisor_group() not in points);
+code = codes.EvaluationAGCode(pls, G);
+print("-----------AG-code:-----------");
+print_code(code);
+code1=codes.PuncturedCode(code, 4);
+print("-----------Punctured-code:-----------");
+print_code(code1);
+code2=code1.shortened([2]);
+print("-----------Shortened-code:-----------");
+print_code(code2);
+code3=codes.SubfieldSubcode(code, GF(q, 'w'));
+print("-----------Subfield-code:-----------");
+print_code(code3);
+code4=code3.dual_code();
+print("-----------Trace-code:-----------");
+print_code(code4);
