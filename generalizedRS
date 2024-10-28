@@ -1,0 +1,25 @@
+def print_code(code):
+    print(f'[{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
+    print(code.generator_matrix())
+    
+q = 5
+n, k = 8, 4
+code = codes.GeneralizedReedSolomonCode(GF(q ** 2).list()[:n], k)
+D = codes.decoders.GRSBerlekampWelchDecoder(code)
+print("Decoding radius is ", D.decoding_radius())
+print("-----------RS-code:-----------");
+print_code(code);
+code1=codes.PuncturedCode(code, 4);
+print("-----------Punctured-code:-----------");
+print_code(code1);
+code2=code1.shortened([2]);
+print("-----------Shortened-code:-----------");
+print_code(code2);
+code3=codes.SubfieldSubcode(code, GF(q, 'w'));
+print("-----------Subfield-code:-----------");
+print_code(code3);
+code41=code.dual_code();
+code42=codes.SubfieldSubcode(code41, GF(q, 'w'));
+code43=code42.dual_code();
+print("-----------Trace-code:-----------");
+print_code(code43);
