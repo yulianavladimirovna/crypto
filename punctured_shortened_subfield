@@ -13,7 +13,7 @@ p = C([1,1,1])
 Q, = p.places()
 pls.remove(Q)
 G = 2*Q
-#G = 2 * (C.divisor_group() not in points);
+
 code = codes.EvaluationAGCode(pls, G);
 print("-----------AG-code:-----------");
 print_code(code);
@@ -26,6 +26,8 @@ print_code(code2);
 code3=codes.SubfieldSubcode(code, GF(q, 'w'));
 print("-----------Subfield-code:-----------");
 print_code(code3);
-code4=code3.dual_code();
+code41=code.dual_code();
+code42=codes.SubfieldSubcode(code41, GF(q, 'w'));
+code43=code42.dual_code();
 print("-----------Trace-code:-----------");
-print_code(code4);
+print_code(code43);
