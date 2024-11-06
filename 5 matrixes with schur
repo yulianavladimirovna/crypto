@@ -88,15 +88,20 @@ def codegen(k, d, curv):  # возвращает матрицу кода, фун
         print_code(code);
         SchurCalc(k, code.generator_matrix(), F)
         
-        code1=codes.PuncturedCode(code, 1)
-        print("-----------Punctured-code:-----------")
-        print_code(code1)
-        SchurCalc(k, code1.generator_matrix(), F)
-        
-        code2=code1.shortened([1])
-        print("-----------Shortened-code:-----------")
-        print_code(code2)
-        SchurCalc(k, code2.generator_matrix(), F)
+        try:
+            code1=codes.PuncturedCode(code, 1)
+            print("-----------Punctured-code:-----------")
+            print_code(code1)
+            SchurCalc(k, code1.generator_matrix(), F)
+            try:
+                code2=code1.shortened([1])
+                print("-----------Shortened-code:-----------")
+                print_code(code2)
+                SchurCalc(k, code2.generator_matrix(), F)
+            except ValueError:
+                print("Размерность кода не позволяет построить укороченный\n")
+        except ValueError:
+            print("Размерность кода не позволяет построить проколотый\n")
         
         code3=codes.SubfieldSubcode(code, GF(q, 'a'))
         print("-----------Subfield-code:-----------")
@@ -155,5 +160,8 @@ q = 2
 d = 8  # переменная в дивизоре G
 k.<a> = GF(q)
 P.<x,y,z> = ProjectiveSpace(k, 2)
-curv = y**2*z+x*y*z-x**3- 0 * x**2*z-z**3  # кривая
+a = random.randint(0, q-1)
+b = random.randint(0, q-1)
+print(f"Случайные значения a = {a}, b = {b}\n")
+curv = y**2 * z + x * y * z - x**3 - a * x**2 *z - b * z**3  # кривая
 codegen(k, d, curv)
