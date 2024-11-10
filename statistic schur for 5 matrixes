@@ -1,10 +1,11 @@
 import random
 import numpy as np
 from random import shuffle
+import time
 
 
 def print_code(code):
-    print(f'[n, k, d] = [{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
+    # print(f'[n, k, d] = [{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
     print(code.generator_matrix())
 
 
@@ -59,94 +60,80 @@ def dimrandomcode(n, k):
         return (k * (k + 1)) / 2
 
 
-def Prob(n, k):
-    c1 = 1
-    c2 = 1
-    c = 1
-    if ((k * (k + 1)) / 2 >= n and n >= k):
-        return '1 Pr(' + str(n) + ')>=' + str(round(1 - 2 ** ((-c1) * k) - 2 ** ((-c2) * ((k * (k - 1)) / 2 - n)), 10))
-    if n >= (k * (k + 1) / 2):
-        return '2 Pr(' + str((k * (k + 1)) / 2) + ')>=' + str(round(1 - 2 ** ((-c) * (n - (k * (k - 1)) / 2)), 10))
-    else:
-        return 'условие не вписывается в теорему ' + 'n=' + str(n) + ' k=' + str(k) + ' (k*(k+1))/2=' + str(
-            (k * (k + 1)) / 2)
-
-
-def codegen(k, d, curv):  # возвращает матрицу кода, функциональное поле, размерность кода,и случайную матрицу
-    P.<x,y,z> = ProjectiveSpace(k, 2)
-    C = Curve(curv, P)
-    res = [None] * 5
-    if C.genus():
-        F = C.function_field()
-        pls = F.places()
-        p = C.rational_points()[0]
-        Q, = p.places()
-        pls.remove(Q)
-        G = d*Q
-        code = codes.EvaluationAGCode(pls, G)
-        
-        #print("-----------AG-code:-----------");
-        #print_code(code);
+def codegen(k, d, curv):  # возвращает результаты проверки неравенства для пяти матриц, \
+    # ассоциированных с кривой
+    C = Curve(curv, P) # задаем кривую
+    res = [None] * 5 # массив вероятностей для пяти матриц
+    if C.genus() == 1: # проверка, что работаем с эллиптической кривой
+        points = C.rational_points() # рациональные точки
+        F = C.function_field() # функциональное кольцо, ассоциированное с кривой
+        places = F.places(1) # возвращает все места порядка 1
+        if points:
+            p = points[0]  # берем первую рациональную точку
+            Q = places[0]  # берем первое место
+            places.remove(Q)  # удаляем это место из списка мест
+            G = d * Q
+            code = codes.EvaluationAGCode(places, G) # на основе оставшихся мест и дивизора G создается аг-код
+        else:
+            raise TypeError("На кривой нет рациональных точек\n")
+        # print("-----------AG-code:-----------")
+        # print_code(code)
         res[0] = SchurCalc(k, code.generator_matrix(), F)
-        
+
         try:
-            code1=codes.PuncturedCode(code, 1)
-            #print("-----------Punctured-code:-----------")
-            #print_code(code1)
+            code1 = codes.PuncturedCode(code, 1)
+            # print("-----------Punctured-code:-----------")
+            # print_code(code1)
             res[1] = SchurCalc(k, code1.generator_matrix(), F)
             try:
-                code2=code1.shortened([1])
-                #print("-----------Shortened-code:-----------")
-                #print_code(code2)
+                code2 = code1.shortened([1])
+                # print("-----------Shortened-code:-----------")
+                # print_code(code2)
                 res[2] = SchurCalc(k, code2.generator_matrix(), F)
             except ValueError:
                 raise ValueError("Размерность кода не позволяет построить укороченный\n")
         except ValueError:
             raise ValueError("Размерность кода не позволяет построить проколотый\n")
-        
-        code3=codes.SubfieldSubcode(code, GF(q, 'a'))
-        #print("-----------Subfield-code:-----------")
-        #print_code(code3)
+
+        code3 = codes.SubfieldSubcode(code, GF(q, 'a'))
+        # print("-----------Subfield-code:-----------")
+        # print_code(code3)
         res[3] = SchurCalc(k, code3.generator_matrix(), F)
-        
-        code41=code.dual_code()
-        code42=codes.SubfieldSubcode(code41, GF(q, 'a'))
-        code43=code42.dual_code()
-        #print("-----------Trace-code:-----------");
-        #print_code(code43)
+
+        code41 = code.dual_code()
+        code42 = codes.SubfieldSubcode(code41, GF(q, 'a'))
+        code43 = code42.dual_code()
+        # print("-----------Trace-code:-----------");
+        # print_code(code43)
         res[4] = SchurCalc(k, code43.generator_matrix(), F)
-        
+
     else:
         raise TypeError("Ошибка, это не эллиптическая кривая")
     return res
-        
-        
-      
 
 
-def SchurCalc(k, M, F):  # вычисление квадратов шура при маскировке весом 1 
+def SchurCalc(k, M, F):  # вычисление квадратов шура при маскировке весом 1
     k1 = M.rank()
     S = random_matrix(k, k1, k1)  # рандомная матрица
     n = len(M[0])
     while S.is_singular():  # проверка на обратимость
         S = random_matrix(k, k1, k1)
-        
+
     # вычисление размерности случайного кода
     random_Schur = dimrandomcode(n, k1)
-    #print('Размерность квадрата шура случайного кода той же размерности = ', random_Schur)
-    #print(f'n = {n}, k = {k1}')
+    # print('Размерность квадрата шура случайного кода той же размерности = ', random_Schur)
+    # print(f'n = {n}, k = {k1}')
 
     # маскировка 1
     P1 = make_weight1(n, q)  # случайная матрица
     G_cap_hidden1 = Matrix(S * M * P1)  # замаскированная матрица вида 1
     G_cap_Schur1 = Matrix(F, Schur_product(G_cap_hidden1, k1))  # квадрат шура при маскировке 1
-    #print("\nВывод матрицы шура при маскировке вида 1")
-    #print(G_cap_Schur1)
+    # print("\nВывод матрицы шура при маскировке вида 1")
+    # print(G_cap_Schur1)
     G1k = G_cap_Schur1.rank()
-    #print('Размерность квадрата шура маскировка весом 1 -', G1k)
-    #print(f'Проверка неравенства - {check_inequality(n, k1, G1k)}')
+    # print('Размерность квадрата шура маскировка весом 1 -', G1k)
+    # print(f'Проверка неравенства - {check_inequality(n, k1, G1k)}')
     return check_inequality(n, k1, G1k)
-
 
 
 # Работа с АГ кодами
@@ -159,21 +146,25 @@ def SchurCalc(k, M, F):  # вычисление квадратов шура пр
     M,F,k1,S=codegenAG(k,q,d,codetype) эрмитова кривая/квартика
     M,F,n,k1,S=codegenAG(k,q,d,codetype,curv) эллиптическая кривая
 '''
-q = 3
-d = 2  # переменная в дивизоре G
+q = 31
+d = q // 2 + 1  # переменная в дивизоре G
 k.<a> = GF(q)
-number_tests = 0
-P.<x,y,z> = ProjectiveSpace(k, 2)
-probs = [0] * 5
+P.<x, y, z> = ProjectiveSpace(k, 2)
+number_tests = 0 # количество пройденных тестов
+probs = [0] * 5 # результат - вероятности для пяти типов матриц
 while number_tests < 10:
-    a = random.randint(0, q-1)
-    b = random.randint(0, q-1)
-    #c = random.randint(0, q-1)
-    #print(f"Случайные значения a = {a}, b = {b}\n")
-    curv = y**2 * z  - x**3 - a * x**2 *z - b * z**3  # кривая
+    a = random.randint(0, q - 1)
+    b = random.randint(0, q - 1)
+    # c = random.randint(0, q-1)
+    # print(f"Случайные значения a = {a}, b = {b}\n")
+    curv = y ** 2 * z - x ** 3 - a * x ** 2 * z - b * z ** 3  # кривая
     try:
+        start = time.time()
         res = codegen(k, d, curv)
-        if None not in res:
+        if None not in res: # если вероятности посчитаны для всех пяти матриц
+            end = time.time() - start
+            print(end)
+            # обновление значений вероятностей
             for i in range(5):
                 a = res[i]
                 probs[i] = (probs[i] * number_tests + a) / (number_tests + 1)
