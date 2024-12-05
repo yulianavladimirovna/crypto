@@ -45,12 +45,17 @@ def make_weight1(n, q):
 
 
 def Schur_product(M, k1):
-    Schur = []
-    for i in range(k1):
-        a = np.array(list(M[i]))
-        for j in range(i, k1):
-            b = np.array(list(M[j]))
-            Schur.append(list(np.multiply(a, b)))
+    # Преобразуем M в массив NumPy
+    M = np.array(M)
+
+    # Создаем тензор, содержащий покомпонентные произведения всех пар строк
+    Schur_tensor = M[:, None, :] * M[None, :, :]
+
+    # Извлекаем только элементы для i <= j, используя треугольную матрицу
+    indices = np.triu_indices(k1)
+    Schur = Schur_tensor[indices]
+    # print('schur product')
+    # Преобразуем результат в список списков
     return Schur
 
 
