@@ -1,0 +1,211 @@
+import random
+import numpy as np
+from random import shuffle
+import time
+from scipy.sparse import coo_matrix
+
+
+def print_code(code):
+    # print(f'[n, k, d] = [{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
+    print(code.generator_matrix())
+
+
+def Pmatrix(n):  # генерирует матрицу веса 1
+    slots = [i for i in range(n)]
+    P = matrix(F, n, [0 for i in range(n ^ 2)])
+    for i in range(n):
+        index = random.choice(slots)
+        slots.remove(index)
+        P[i, index] = 1
+    return P
+
+
+def check_inequality(n, k, r):
+    if k * (k + 1) * 0.5 >= n:
+        if r == n:
+            return True
+        else:
+            return False
+    else:
+        if r == (k * (k + 1) * 0.5):
+            return True
+        else:
+            return False
+
+
+def make_weight1(n, q):
+    MS = MatrixSpace(QQ, n)
+    permutation = list(range(0, n))
+    shuffle(permutation)
+    matrix = np.zeros((n, n))  # making zero matrix
+    for i in range(n):
+        matrix[i][permutation[i]] = 1  # putting 1 (by permutation)
+    matrix_new = MS.matrix(matrix)
+    return matrix_new.change_ring(GF(q))
+
+
+def Schur_product(M, k1):
+    # Преобразуем M в массив NumPy
+    M = np.array(M)
+
+    # Создаем тензор, содержащий покомпонентные произведения всех пар строк
+    Schur_tensor = M[:, None, :] * M[None, :, :]
+
+    # Извлекаем только элементы для i <= j, используя треугольную матрицу
+    indices = np.triu_indices(k1)
+    Schur = Schur_tensor[indices]
+    # print('schur product')
+    # Преобразуем результат в список списков
+    return Schur
+
+
+def dimrandomcode(n, k):
+    if k * (k + 1) / 2 >= n:
+        return n
+    else:
+        return (k * (k + 1)) / 2
+
+
+def codegen(k, d, curv):  
+    res = [None] * 5
+    try:
+        C = Curve(curv, P)  # задаем кривую
+        
+        if C.genus() != 1:
+            raise TypeError("Ошибка, это не эллиптическая кривая")
+        
+        points = C.rational_points()  # рациональные точки
+        
+        if not points:
+            raise TypeError("На кривой нет рациональных точек\n")
+        
+        F = C.function_field()  # функциональное поле
+        places = F.places(1)  # места порядка 1
+        
+        if not places:
+            raise ValueError("Недостаточно мест порядка 1 для создания AG-кода")
+        
+        Q = places[0]
+        places.remove(Q)
+        G = d * Q
+        
+        code = codes.EvaluationAGCode(places, G)
+        res[0] = SchurCalc(k, code.generator_matrix(), F)
+
+        try:
+            code1 = codes.PuncturedCode(code, 1)
+            res[1] = SchurCalc(k, code1.generator_matrix(), F)
+            try:
+                code2 = code1.shortened([1])
+                res[2] = SchurCalc(k, code2.generator_matrix(), F)
+            except ValueError:
+                print("Невозможно создать укороченный код")
+        except ValueError:
+            print("Невозможно создать проколотый код")
+
+        code3 = codes.SubfieldSubcode(code, GF(q, 'a'))
+        res[3] = SchurCalc(k, code3.generator_matrix(), F)
+
+        code41 = code.dual_code()
+        code42 = codes.SubfieldSubcode(code41, GF(q, 'a'))
+        code43 = code42.dual_code()
+        res[4] = SchurCalc(k, code43.generator_matrix(), F)
+
+    except Exception as e:
+        print(f"Ошибка в codegen: {e}")
+    return res
+
+
+
+def generate_random_non_singular_matrix(k, q, n):
+    # Создаем диагональную матрицу с 1 на диагонали
+    diagonal_elements = [1] * n
+
+    # Создаем диагональную матрицу
+    M = Matrix.diagonal(k, diagonal_elements)
+
+    # Применяем случайные линейные преобразования строк и столбцов
+    for i in range(n):
+        # Случайное число для перемешивания
+        row_scale = randint(1, q)
+        col_scale = randint(1, q)
+        # Случайная линейная комбинация строк и столбцов
+        if i < n - 1:
+            M[i] += row_scale * M[i + 1]  # Добавляем случайные строки
+            M[:, i] += col_scale * M[:, i + 1]  # Добавляем случайные столбцы
+
+    # Возвращаем результат
+    return M
+
+
+def SchurCalc(k, M, F):  # вычисление квадратов шура при маскировке весом 1
+    k1 = M.rank()
+    n = len(M[0])
+    S = generate_random_non_singular_matrix(GF(q), q, k1)
+
+    # вычисление размерности случайного кода
+    # random_Schur = dimrandomcode(n, k1)
+    # print('Размерность квадрата шура случайного кода той же размерности = ', random_Schur)
+    # print(f'n = {n}, k = {k1}')
+
+    # маскировка 1
+    P1 = make_weight1(n, q)  # случайная матрица
+    G_cap_hidden1 = Matrix(S * M * P1)  # замаскированная матрица вида 1
+    G_cap_Schur1 = Matrix(GF(q), Schur_product(G_cap_hidden1, k1))  # квадрат шура при маскировке 1
+    # print("\nВывод матрицы шура при маскировке вида 1")
+    # print(G_cap_Schur1)
+    G1k = G_cap_Schur1.rank()
+    # print('Размерность квадрата шура маскировка весом 1 -', G1k)
+    # print(f'Проверка неравенства - {check_inequality(n, k1, G1k)}')
+    return check_inequality(n, k1, G1k)
+
+
+# Работа с АГ кодами
+# задание поля, в случае эрмитовой учитывать что оно будет возведено в квадрат!
+'''
+Типы кодов:
+    1 - эрмитов код, не требует задачи кривой
+    2 - гипер-/эллиптический код, требует задания кривой
+    3 - код на квартике клейна, не требует задания кривой
+    M,F,k1,S=codegenAG(k,q,d,codetype) эрмитова кривая/квартика
+    M,F,n,k1,S=codegenAG(k,q,d,codetype,curv) эллиптическая кривая
+'''
+q = 25  # Поле F25 (5^2)
+d = q // 2 + 1  # Переменная в делителе G
+
+# Создаем поле F25
+F5 = GF(5)
+k.<a> = GF(5^2)  # Поле F25
+P.<x, y, z> = ProjectiveSpace(k, 2)
+
+number_tests = 0  # Количество пройденных тестов
+probs = [0] * 5  # Результат - вероятности для пяти типов матриц
+
+while number_tests < 10:
+    # Генерация случайных элементов в F25
+    a = k.random_element()
+    b = k.random_element()
+    
+    # Кривая в проективном пространстве над F25
+    curv = y**2 * z - x**3 - a * x**2 * z - b * z**3
+    
+    try:
+        start = time.time()
+        
+        # Вызов вашей функции для обработки кривой
+        res = codegen(k, d, curv)
+        
+        if None not in res:  # Если вероятности посчитаны для всех пяти матриц
+            end = time.time() - start
+            print(end)
+            
+            # Обновление значений вероятностей
+            for i in range(5):
+                probs[i] = (probs[i] * number_tests + res[i]) / (number_tests + 1)
+            
+            number_tests += 1
+    
+    except Exception:
+        continue
+
+print(probs)
