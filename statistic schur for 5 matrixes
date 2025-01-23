@@ -164,27 +164,23 @@ def SchurCalc(k, M, F):  # вычисление квадратов шура пр
 # Работа с АГ кодами
 # задание поля, в случае эрмитовой учитывать что оно будет возведено в квадрат!
 '''
-Типы кодов:
-    1 - эрмитов код, не требует задачи кривой
-    2 - гипер-/эллиптический код, требует задания кривой
-    3 - код на квартике клейна, не требует задания кривой
-    M,F,k1,S=codegenAG(k,q,d,codetype) эрмитова кривая/квартика
-    M,F,n,k1,S=codegenAG(k,q,d,codetype,curv) эллиптическая кривая
+    y**2 * z  + c * y * z **2 - x**3 - a * x *z**2 - b * z**3 - гиперэллиптическая
+    y**2 * z + x * y * z - x**3 - a * x**2 *z - b * z**3 - эллиптическая
 '''
-q = 2
+q = 3
 d = q // 2 + 1  # переменная в дивизоре G
 k.<a> = GF(q)
 P.<x, y, z> = ProjectiveSpace(k, 2)
 number_tests = 0 # количество пройденных тестов
 probs = [0] * 5 # результат - вероятности для пяти типов матриц
-total_tests = 1 # количество запускаемых тестов, на которых считается вероятность
+total_tests = 15 # количество запускаемых тестов, на которых считается вероятность
 
 while number_tests < total_tests:
     a = random.randint(0, q - 1)
     b = random.randint(0, q - 1)
-    # c = random.randint(0, q-1)
+    c = random.randint(0, q-1)
     # print(f"Случайные значения a = {a}, b = {b}\n")
-    curv = y**2 * z + x * y * z - x**3 - a * x**2 *z - b * z**3 # кривая
+    curv = y**2 * z  + c * y * z **2 - x**3 - a * x *z**2 - b * z**3 # кривая
     try:
         start = time.time()
         res = codegen(k, d, curv)
@@ -196,8 +192,9 @@ while number_tests < total_tests:
                 a = res[i]
                 probs[i] = (probs[i] * number_tests + a) / (number_tests + 1)
             number_tests += 1
-    except Exception:
+    except Exception as e:
         continue
+        # print(f"Error is {e}")
 # вывод вероятностей для разных кодов
 code_names = ['AG-code', 'Punctured-code', 'Shortened-code', 'Subfield-code', 'Trace-code']
 for i in range(5):
