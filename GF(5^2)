@@ -66,46 +66,48 @@ def dimrandomcode(n, k):
         return (k * (k + 1)) / 2
 
 
-def codegen(k, d, curv):  
-    res = [None] * 5
+def codegen(k, d, curv):
+    res = [None] * 5 # массив, в котором будут результаты неравенства, т е нули и единицы
     try:
         C = Curve(curv, P)  # задаем кривую
-        
+
         if C.genus() != 1:
             raise TypeError("Ошибка, это не эллиптическая кривая")
-        
+
         points = C.rational_points()  # рациональные точки
-        
+
         if not points:
             raise TypeError("На кривой нет рациональных точек\n")
-        
+
         F = C.function_field()  # функциональное поле
         places = F.places(1)  # места порядка 1
-        
+
         if not places:
             raise ValueError("Недостаточно мест порядка 1 для создания AG-кода")
-        
+
         Q = places[0]
         places.remove(Q)
         G = d * Q
-        
+        # AG-code
         code = codes.EvaluationAGCode(places, G)
         res[0] = SchurCalc(k, code.generator_matrix(), F)
 
         try:
+            # Punctured-code
             code1 = codes.PuncturedCode(code, 1)
             res[1] = SchurCalc(k, code1.generator_matrix(), F)
             try:
+                # Shortened-code
                 code2 = code1.shortened([1])
                 res[2] = SchurCalc(k, code2.generator_matrix(), F)
             except ValueError:
                 print("Невозможно создать укороченный код")
         except ValueError:
             print("Невозможно создать проколотый код")
-
+        # Subfield-code
         code3 = codes.SubfieldSubcode(code, GF(q, 'a'))
         res[3] = SchurCalc(k, code3.generator_matrix(), F)
-
+        # Trace-code
         code41 = code.dual_code()
         code42 = codes.SubfieldSubcode(code41, GF(q, 'a'))
         code43 = code42.dual_code()
@@ -114,7 +116,6 @@ def codegen(k, d, curv):
     except Exception as e:
         print(f"Ошибка в codegen: {e}")
     return res
-
 
 
 def generate_random_non_singular_matrix(k, q, n):
@@ -175,37 +176,40 @@ d = q // 2 + 1  # Переменная в делителе G
 
 # Создаем поле F25
 F5 = GF(5)
-k.<a> = GF(5^2)  # Поле F25
+k.<a> = GF(5 ^ 2)  # Поле F25
 P.<x, y, z> = ProjectiveSpace(k, 2)
 
 number_tests = 0  # Количество пройденных тестов
 probs = [0] * 5  # Результат - вероятности для пяти типов матриц
+total_tests = 1 # количество запускаемых тестов, на которых считается вероятность
 
-while number_tests < 10:
+while number_tests < total_tests:
     # Генерация случайных элементов в F25
     a = k.random_element()
     b = k.random_element()
-    
+
     # Кривая в проективном пространстве над F25
-    curv = y**2 * z - x**3 - a * x**2 * z - b * z**3
-    
+    curv = y ** 2 * z - x ** 3 - a * x ** 2 * z - b * z ** 3
+
     try:
         start = time.time()
-        
+
         # Вызов вашей функции для обработки кривой
         res = codegen(k, d, curv)
-        
+
         if None not in res:  # Если вероятности посчитаны для всех пяти матриц
             end = time.time() - start
-            print(end)
-            
+            #print(end)
+
             # Обновление значений вероятностей
             for i in range(5):
                 probs[i] = (probs[i] * number_tests + res[i]) / (number_tests + 1)
-            
+
             number_tests += 1
-    
+
     except Exception:
         continue
-
-print(probs)
+# вывод вероятностей для разных кодов
+code_names = ['AG-code', 'Punctured-code', 'Shortened-code', 'Subfield-code', 'Trace-code']
+for i in range(5):
+    print(f"{code_names[i]}: {probs[i]}\n")
