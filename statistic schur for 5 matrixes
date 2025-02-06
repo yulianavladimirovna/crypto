@@ -6,31 +6,15 @@ from scipy.sparse import coo_matrix
 
 
 def print_code(code):
-    # print(f'[n, k, d] = [{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
+    print(f'[n, k, d] = [{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
     print(code.generator_matrix())
-
-
-def Pmatrix(n):  # генерирует матрицу веса 1
-    slots = [i for i in range(n)]
-    P = matrix(F, n, [0 for i in range(n ^ 2)])
-    for i in range(n):
-        index = random.choice(slots)
-        slots.remove(index)
-        P[i, index] = 1
-    return P
 
 
 def check_inequality(n, k, r):
     if k * (k + 1) * 0.5 >= n:
-        if r == n:
-            return True
-        else:
-            return False
+        return r == n
     else:
-        if r == (k * (k + 1) * 0.5):
-            return True
-        else:
-            return False
+        return r == (k * (k + 1) * 0.5)
 
 
 def make_weight1(n, q):
@@ -47,50 +31,44 @@ def make_weight1(n, q):
 def Schur_product(M, k1):
     # Преобразуем M в массив NumPy
     M = np.array(M)
-
     # Создаем тензор, содержащий покомпонентные произведения всех пар строк
     Schur_tensor = M[:, None, :] * M[None, :, :]
-
     # Извлекаем только элементы для i <= j, используя треугольную матрицу
     indices = np.triu_indices(k1)
     Schur = Schur_tensor[indices]
-    # print('schur product')
     # Преобразуем результат в список списков
     return Schur
 
 
-def dimrandomcode(n, k):
-    if k * (k + 1) / 2 >= n:
-        return n
-    else:
-        return (k * (k + 1)) / 2
-
-
-def codegen(k, d, curv):  # возвращает результаты проверки неравенства для пяти матриц, \
+def codegen(k, d, curv, P):  # возвращает результаты проверки неравенства для пяти матриц, \
     # ассоциированных с кривой
-    C = Curve(curv, P) # задаем кривую
-    res = [None] * 5 # массив вероятностей для пяти матриц
-    if C.genus() == 1: # проверка, что работаем с эллиптической кривой
-        points = C.rational_points() # рациональные точки
-        F = C.function_field() # функциональное кольцо, ассоциированное с кривой
-        places = F.places(1) # возвращает все места порядка 1
-        if points:
-            p = points[0]  # берем первую рациональную точку
-            Q = places[0]  # берем первое место
-            places.remove(Q)  # удаляем это место из списка мест
-            G = d * Q
-            code = codes.EvaluationAGCode(places, G) # на основе оставшихся мест и дивизора G создается аг-код
+    C = Curve(curv, P)  # Задаем кривую
+    res = [None] * 5  # Массив вероятностей для пяти матриц
+
+    if C.genus() == 1:  # Проверяем, что работаем с эллиптической кривой
+        F = C.function_field()  # Функциональное поле кривой
+        places = F.places(1)  # Получаем места порядка 1
+
+        if len(places) > 1:  # Проверяем, что есть хотя бы два места
+            Q = places[0]  # Берем первое место
+            places.remove(Q)  # Удаляем его из списка
+
+            G = d * Q  # Создаем дивизор
+
+            code = codes.EvaluationAGCode(places, G)  # Создаем AG-код
         else:
-            raise TypeError("На кривой нет рациональных точек\n")
+            raise ValueError("Недостаточно мест для построения AG-кода")
+   
         # print("-----------AG-code:-----------")
         # print_code(code)
         res[0] = SchurCalc(k, code.generator_matrix(), F)
-
+        
         try:
             code1 = codes.PuncturedCode(code, 1)
             # print("-----------Punctured-code:-----------")
             # print_code(code1)
             res[1] = SchurCalc(k, code1.generator_matrix(), F)
+            
             try:
                 code2 = code1.shortened([1])
                 # print("-----------Shortened-code:-----------")
@@ -98,16 +76,17 @@ def codegen(k, d, curv):  # возвращает результаты прове
                 res[2] = SchurCalc(k, code2.generator_matrix(), F)
             except ValueError:
                 raise ValueError("Размерность кода не позволяет построить укороченный\n")
+                
         except ValueError:
             raise ValueError("Размерность кода не позволяет построить проколотый\n")
 
-        code3 = codes.SubfieldSubcode(code, GF(q, 'a'))
+        code3 = codes.SubfieldSubcode(code, GF(q))
         # print("-----------Subfield-code:-----------")
         # print_code(code3)
         res[3] = SchurCalc(k, code3.generator_matrix(), F)
 
         code41 = code.dual_code()
-        code42 = codes.SubfieldSubcode(code41, GF(q, 'a'))
+        code42 = codes.SubfieldSubcode(code41, GF(q))
         code43 = code42.dual_code()
         # print("-----------Trace-code:-----------");
         # print_code(code43)
@@ -161,29 +140,29 @@ def SchurCalc(k, M, F):  # вычисление квадратов шура пр
     return check_inequality(n, k1, G1k)
 
 
-# Работа с АГ кодами
-# задание поля, в случае эрмитовой учитывать что оно будет возведено в квадрат!
 '''
     y**2 * z  + c * y * z **2 - x**3 - a * x *z**2 - b * z**3 - гиперэллиптическая
-    y**2 * z + x * y * z - x**3 - a * x**2 *z - b * z**3 - эллиптическая
+    y**2 * z - x**3 - a * x**2 *z - b * z**3 - эллиптическая
 '''
-q = 3
+
+
+q = 61
 d = q // 2 + 1  # переменная в дивизоре G
 k.<a> = GF(q)
 P.<x, y, z> = ProjectiveSpace(k, 2)
 number_tests = 0 # количество пройденных тестов
 probs = [0] * 5 # результат - вероятности для пяти типов матриц
-total_tests = 15 # количество запускаемых тестов, на которых считается вероятность
+total_tests = 1 # количество запускаемых тестов, на которых считается вероятность
 
 while number_tests < total_tests:
     a = random.randint(0, q - 1)
     b = random.randint(0, q - 1)
-    c = random.randint(0, q-1)
+    # c = random.randint(0, q - 1)
     # print(f"Случайные значения a = {a}, b = {b}\n")
-    curv = y**2 * z  + c * y * z **2 - x**3 - a * x *z**2 - b * z**3 # кривая
+    curv = y**2 * z - x**3 - a * x**2 *z - b * z**3 # кривая
     try:
         start = time.time()
-        res = codegen(k, d, curv)
+        res = codegen(k, d, curv, P)
         if None not in res: # если вероятности посчитаны для всех пяти матриц
             end = time.time() - start
             # print(end)
