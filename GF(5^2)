@@ -9,17 +9,7 @@ def print_code(code):
     # print(f'[n, k, d] = [{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
     print(code.generator_matrix())
 
-
-def Pmatrix(n):  # генерирует матрицу веса 1
-    slots = [i for i in range(n)]
-    P = matrix(F, n, [0 for i in range(n ^ 2)])
-    for i in range(n):
-        index = random.choice(slots)
-        slots.remove(index)
-        P[i, index] = 1
-    return P
-
-
+    
 def check_inequality(n, k, r):
     if k * (k + 1) * 0.5 >= n:
         if r == n:
@@ -59,13 +49,6 @@ def Schur_product(M, k1):
     return Schur
 
 
-def dimrandomcode(n, k):
-    if k * (k + 1) / 2 >= n:
-        return n
-    else:
-        return (k * (k + 1)) / 2
-
-
 def codegen(k, d, curv):
     res = [None] * 5 # массив, в котором будут результаты неравенства, т е нули и единицы
     try:
@@ -74,22 +57,19 @@ def codegen(k, d, curv):
         if C.genus() != 1:
             raise TypeError("Ошибка, это не эллиптическая кривая")
 
-        points = C.rational_points()  # рациональные точки
-
-        if not points:
-            raise TypeError("На кривой нет рациональных точек\n")
-
         F = C.function_field()  # функциональное поле
         places = F.places(1)  # места порядка 1
 
-        if not places:
-            raise ValueError("Недостаточно мест порядка 1 для создания AG-кода")
+        if len(places) > 1:  # Проверяем, что есть хотя бы два места
+            Q = places[0]  # Берем первое место
+            places.remove(Q)  # Удаляем его из списка
 
-        Q = places[0]
-        places.remove(Q)
-        G = d * Q
-        # AG-code
-        code = codes.EvaluationAGCode(places, G)
+            G = d * Q  # Создаем дивизор
+
+            code = codes.EvaluationAGCode(places, G)  # Создаем AG-код
+        else:
+            raise ValueError("Недостаточно мест для построения AG-кода")
+                             
         res[0] = SchurCalc(k, code.generator_matrix(), F)
 
         try:
@@ -172,10 +152,9 @@ def SchurCalc(k, M, F):  # вычисление квадратов шура пр
     M,F,n,k1,S=codegenAG(k,q,d,codetype,curv) эллиптическая кривая
 '''
 q = 25  # Поле F25 (5^2)
-d = q // 2 + 1  # Переменная в делителе G
+d = q // 2 + 1  # Переменная в дивизоре G
 
 # Создаем поле F25
-F5 = GF(5)
 k.<a> = GF(5 ^ 2)  # Поле F25
 P.<x, y, z> = ProjectiveSpace(k, 2)
 
@@ -189,7 +168,7 @@ while number_tests < total_tests:
     b = k.random_element()
 
     # Кривая в проективном пространстве над F25
-    curv = y**2 * z + x * y * z - x**3 - a * x**2 *z - b * z**3
+    curv = y**2 * z - x**3 - a * x**2 *z - b * z**3
 
     try:
         start = time.time()
