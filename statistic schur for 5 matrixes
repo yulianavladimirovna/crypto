@@ -4,18 +4,7 @@ from random import shuffle, randint
 import time
 
 
-def print_code(code):
-    """Выводит [n, k, d] и генераторную матрицу кода."""
-    print(f'[n, k, d] = [{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
-    print(code.generator_matrix())
-
-
 def check_inequality(n, k, r):
-    """
-    Проверка известного неравенства для ранга квадрата Шура:
-    - если k(k+1)/2 >= n, то ожидается r == n;
-    - иначе ожидается r == k(k+1)/2
-    """
     half_k = k * (k + 1) // 2  # целочисленное умножение
     if half_k >= n:
         return (r == n)
@@ -24,67 +13,41 @@ def check_inequality(n, k, r):
 
 
 def make_weight1(n, q):
-    """
-    Создаёт перестановочную матрицу n x n над GF(q).
-    У каждой строки ровно одна единица, расставленная по случайной перестановке столбцов.
-    """
-    M = zero_matrix(GF(q), n, n)
-    perm = list(range(n))
-    random.shuffle(perm)
+    slots = [i for i in range(n)]
+    P = matrix(GF(q), n, [0 for i in range(n ^ 2)])
     for i in range(n):
-        M[i, perm[i]] = GF(q)(1)
-    return M
+        index = random.choice(slots)
+        slots.remove(index)
+        P[i, index] = 1
+    return P
 
 
-def Schur_product(M, k1):
-    """
-    Вычисляет 'Schur-продукт' (покомпонентное умножение всех пар строк) матрицы M.
-    Возвращаем объект вида np.array(...) размера [k1*(k1+1)/2, n].
-    """
-    # Переводим Sage-матрицу в NumPy (будет dtype=object при работе в среде Sage).
-    M_np = np.array(M, dtype=object)  # важно dtype=object, чтобы элементы GF(q) умножались корректно
-    # Формируем тензор покомпонентных произведений (k1, k1, n)
-    Schur_tensor = M_np[:, None, :] * M_np[None, :, :]
-    # Берём верхнетреугольные индексы (включая диагональ)
-    indices = np.triu_indices(k1)
-    # Извлекаем соответствующие строки (получится shape = (k1*(k1+1)//2, n))
-    Schur_slice = Schur_tensor[indices]
-    return Schur_slice
+def Schur_product(M,k1):
+    Schur=[]
+    for i in range(k1):
+        a = np.array(list(M[i]))
+        for j in range(i,k1):
+            b = np.array(list(M[j]))
+            Schur.append(list(np.multiply(a,b)))
+    return Schur
 
 
 def generate_random_non_singular_matrix(q, k1):
-    """
-    Генерирует случайную обратимую (k1 x k1)-матрицу над GF(q),
-    начиная с единичной и добавляя случайные линейные комбинации строк и столбцов.
-    """
-    # Начинаем с единичной матрицы
-    M = identity_matrix(GF(q), k1)
-
-    # Перемешиваем
-    for i in range(k1):
-        # Случайные элементы из GF(q):
-        # если хотите гарантировать ненулевые, используйте random_element(nonzero=True)
-        row_scale = GF(q).random_element()
-        col_scale = GF(q).random_element()
-        if i < k1 - 1:
-            M[i] += row_scale * M[i + 1]
-            M[:, i] += col_scale * M[:, i + 1]
-
-    # При желании можно проверить детерминант на 0, и если == 0, генерировать заново.
-    # Но на практике вероятность малa.
-
-    return M
+    S = random_matrix(GF(q),k1,k1) #рандомная матрица
+    while S.is_singular():
+        S = random_matrix(GF(q),k1,k1)
+    return S
 
 
-def SchurCalc(M):
+def SchurCalc(M, q):
     """
     Считает 'квадрат Шура' для генераторной матрицы M (размер k1 x n) над GF(q),
     предварительно маскируя её S*M*P1, где S - случайно-невырожденная (k1 x k1),
     а P1 - перестановочная (n x n).
-    Возвращает булеву величину check_inequality(...) 
+    Возвращает булеву величину check_inequality(...)
     """
     # Определяем k1 и n (число строк и столбцов матрицы)
-    k1 = M.nrows()
+    k1 = M.rank()
     n = M.ncols()
 
     # Генерируем случайную обратимую (k1 x k1)-матрицу S над GF(q)
@@ -94,13 +57,10 @@ def SchurCalc(M):
     P1 = make_weight1(n, q)
 
     # Замаскированная генераторная матрица = S * M * P1 (размер все равно k1 x n)
-    G_cap_hidden1 = S * M * P1
-
-    # Формируем квадрат Шура (размер ~ [k1*(k1+1)/2] x n), но сначала как NumPy массив
-    Schur_np = Schur_product(G_cap_hidden1, k1)
+    G_cap_hidden1 = Matrix(S * M * P1)
 
     # Переводим обратно в Sage-матрицу над GF(q)
-    G_cap_Schur1 = Matrix(GF(q), Schur_np)
+    G_cap_Schur1 = Matrix(GF(q), Schur_product(G_cap_hidden1, k1))
 
     # Считаем ранг
     G1k = G_cap_Schur1.rank()
@@ -129,23 +89,18 @@ def codegen(k, d, curv, P):
             G = d * Q
             # Создаем AG-код (Evaluation)
             code = codes.EvaluationAGCode(places, G)
-
-            # Переводим генераторную матрицу в GF(q)
-            GM_code = code.generator_matrix().change_ring(GF(q))
             # Cчитаем Шур-квадрат
-            res[0] = SchurCalc(GM_code)
+            res[0] = SchurCalc(code.generator_matrix(), q)
 
             # Проколотый код
             try:
                 code1 = codes.PuncturedCode(code, 1)
-                GM_code1 = code1.generator_matrix().change_ring(GF(q))
-                res[1] = SchurCalc(GM_code1)
+                res[1] = SchurCalc(code1.generator_matrix(), q)
 
                 # Укороченный код
                 try:
                     code2 = code1.shortened([1])
-                    GM_code2 = code2.generator_matrix().change_ring(GF(q))
-                    res[2] = SchurCalc(GM_code2)
+                    res[2] = SchurCalc(code2.generator_matrix(), q)
                 except ValueError:
                     raise ValueError("Размерность кода не позволяет построить укороченный\n")
             except ValueError:
@@ -153,15 +108,13 @@ def codegen(k, d, curv, P):
 
             # Подкод над подполем
             code3 = codes.SubfieldSubcode(code, GF(q))
-            GM_code3 = code3.generator_matrix().change_ring(GF(q))
-            res[3] = SchurCalc(GM_code3)
+            res[3] = SchurCalc(code3.generator_matrix(), q)
 
             # Трасс-код = (Subfield(dual_code(code)))^dual_code
             code41 = code.dual_code()
             code42 = codes.SubfieldSubcode(code41, GF(q))
             code43 = code42.dual_code()
-            GM_code43 = code43.generator_matrix().change_ring(GF(q))
-            res[4] = SchurCalc(GM_code43)
+            res[4] = SchurCalc(code43.generator_matrix(), q)
 
         else:
             raise ValueError("Недостаточно мест для построения AG-кода")
@@ -173,7 +126,7 @@ def codegen(k, d, curv, P):
 
 # -------------------- ОСНОВНОЙ БЛОК --------------------
 
-q = 43
+q = 53
 # В Sage синтаксис для GF(q) часто таков:  k.<a> = GF(q), но здесь условно:
 k = GF(q)
 
@@ -194,14 +147,12 @@ while number_tests < total_tests:
 
     # Задаём (наугад) эллиптическую кривую в проективных координатах:
     # y^2 * z - x^3 - a*x^2*z - b*z^3 = 0
-    curv = y^2 * z - x^3 - a_ * x^2 * z - b_ * z^3
+    curv = y^2 * z - x^3 - a_ * x * z^2 - b_ * z^3
 
     try:
-        start = time.time()
         res = codegen(k, d, curv, P)
         # Если все пять результатов не None
         if None not in res:
-            end = time.time() - start
             # print(f"Время на один прогон: {end}s")
 
             # Обновляем среднее
@@ -209,6 +160,7 @@ while number_tests < total_tests:
                 probs[i] = (probs[i] * number_tests + (1 if res[i] else 0)) / (number_tests + 1)
             number_tests += 1
     except Exception as e:
+        print(f'error is {e}')
         # Если что-то пошло не так, просто пропускаем, пытаемся заново
         continue
 
