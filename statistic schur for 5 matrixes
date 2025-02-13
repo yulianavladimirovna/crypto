@@ -1,8 +1,21 @@
 import random
 import numpy as np
 from random import shuffle, randint
+import time
+
+
+def print_code(code):
+    """Выводит [n, k, d] и генераторную матрицу кода."""
+    print(f'[n, k, d] = [{code.length()}, {code.dimension()}, {code.minimum_distance()}]')
+    print(code.generator_matrix())
+
 
 def check_inequality(n, k, r):
+    """
+    Проверка известного неравенства для ранга квадрата Шура:
+    - если k(k+1)/2 >= n, то ожидается r == n;
+    - иначе ожидается r == k(k+1)/2
+    """
     half_k = k * (k + 1) // 2  # целочисленное умножение
     if half_k >= n:
         return (r == n)
@@ -28,19 +41,38 @@ def Schur_product(M, k1):
     Вычисляет 'Schur-продукт' (покомпонентное умножение всех пар строк) матрицы M.
     Возвращаем объект вида np.array(...) размера [k1*(k1+1)/2, n].
     """
-    Schur=[]
-    for i in range(k1):
-        a = np.array(list(M[i]))
-        for j in range(i,k1):
-            b = np.array(list(M[j]))
-            Schur.append(list(np.multiply(a,b)))
-    return Schur
+    # Переводим Sage-матрицу в NumPy (будет dtype=object при работе в среде Sage).
+    M_np = np.array(M, dtype=object)  # важно dtype=object, чтобы элементы GF(q) умножались корректно
+    # Формируем тензор покомпонентных произведений (k1, k1, n)
+    Schur_tensor = M_np[:, None, :] * M_np[None, :, :]
+    # Берём верхнетреугольные индексы (включая диагональ)
+    indices = np.triu_indices(k1)
+    # Извлекаем соответствующие строки (получится shape = (k1*(k1+1)//2, n))
+    Schur_slice = Schur_tensor[indices]
+    return Schur_slice
 
 
 def generate_random_non_singular_matrix(q, k1):
-    M = random_matrix(GF(q),k1,k1) #рандомная матрица
-    while M.is_singular():
-        M = random_matrix(GF(q),k1,k1)
+    """
+    Генерирует случайную обратимую (k1 x k1)-матрицу над GF(q),
+    начиная с единичной и добавляя случайные линейные комбинации строк и столбцов.
+    """
+    # Начинаем с единичной матрицы
+    M = identity_matrix(GF(q), k1)
+
+    # Перемешиваем
+    for i in range(k1):
+        # Случайные элементы из GF(q):
+        # если хотите гарантировать ненулевые, используйте random_element(nonzero=True)
+        row_scale = GF(q).random_element()
+        col_scale = GF(q).random_element()
+        if i < k1 - 1:
+            M[i] += row_scale * M[i + 1]
+            M[:, i] += col_scale * M[:, i + 1]
+
+    # При желании можно проверить детерминант на 0, и если == 0, генерировать заново.
+    # Но на практике вероятность малa.
+
     return M
 
 
@@ -52,7 +84,7 @@ def SchurCalc(M):
     Возвращает булеву величину check_inequality(...) 
     """
     # Определяем k1 и n (число строк и столбцов матрицы)
-    k1 = M.rank()
+    k1 = M.nrows()
     n = M.ncols()
 
     # Генерируем случайную обратимую (k1 x k1)-матрицу S над GF(q)
@@ -62,10 +94,13 @@ def SchurCalc(M):
     P1 = make_weight1(n, q)
 
     # Замаскированная генераторная матрица = S * M * P1 (размер все равно k1 x n)
-    G_cap_hidden1 = Matrix(S * M * P1)
+    G_cap_hidden1 = S * M * P1
+
+    # Формируем квадрат Шура (размер ~ [k1*(k1+1)/2] x n), но сначала как NumPy массив
+    Schur_np = Schur_product(G_cap_hidden1, k1)
 
     # Переводим обратно в Sage-матрицу над GF(q)
-    G_cap_Schur1 = Matrix(GF(q), Schur_product(G_cap_hidden1, k1))
+    G_cap_Schur1 = Matrix(GF(q), Schur_np)
 
     # Считаем ранг
     G1k = G_cap_Schur1.rank()
@@ -138,7 +173,7 @@ def codegen(k, d, curv, P):
 
 # -------------------- ОСНОВНОЙ БЛОК --------------------
 
-q = 61
+q = 43
 # В Sage синтаксис для GF(q) часто таков:  k.<a> = GF(q), но здесь условно:
 k = GF(q)
 
